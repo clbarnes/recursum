@@ -1,5 +1,5 @@
 [package]
-name = "treesum"
+name = "recursum"
 version = "0.1.0"
 authors = ["Chris Barnes <barnesc@janelia.hhmi.org>"]
 edition = "2018"

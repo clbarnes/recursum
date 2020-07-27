@@ -5,7 +5,7 @@ Rust script to hash every file in a directory, quickly.
 Parallelises file discovery and hashing.
 [Default hasher](https://mollyrocket.com/meowhash) is not cryptographically secure.
 
-`"{path}\t{hex_digest}"` printed to stdout; progress information on stderr.
+`"{path}"\t{hex_digest}` printed to stdout; progress information on stderr.
 
 Contributions welcome.
 
@@ -14,7 +14,7 @@ recursum 0.1.0
 Recursively hash all files in a directory, fast.
 
 USAGE:
-    treesum [OPTIONS] <input>
+    recursum [OPTIONS] <input>
 
 FLAGS:
     -h, --help       Prints help information

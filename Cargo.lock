@@ -1010,6 +1010,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "recursum"
+version = "0.1.0"
+dependencies = [
+ "cargo-release",
+ "digest",
+ "hex",
+ "indicatif",
+ "jwalk",
+ "meowhash",
+ "num_cpus",
+ "pathdiff",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1340,22 +1356,6 @@ dependencies = [
  "chrono",
  "combine",
  "linked-hash-map",
-]
-
-[[package]]
-name = "treesum"
-version = "0.1.0"
-dependencies = [
- "cargo-release",
- "digest",
- "hex",
- "indicatif",
- "jwalk",
- "meowhash",
- "num_cpus",
- "pathdiff",
- "structopt",
- "tokio",
 ]
 
 [[package]]
