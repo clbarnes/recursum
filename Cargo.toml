@@ -3,6 +3,8 @@ name = "recursum"
 version = "0.1.0"
 authors = ["Chris Barnes <barnesc@janelia.hhmi.org>"]
 edition = "2018"
+description = "Quickly hash all files in a directory tree"
+license = "MIT"
 
 [dependencies]
 meowhash = "0.3.0"
