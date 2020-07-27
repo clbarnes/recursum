@@ -1,0 +1,16 @@
+[package]
+name = "treesum"
+version = "0.1.0"
+authors = ["Chris Barnes <barnesc@janelia.hhmi.org>"]
+edition = "2018"
+
+[dependencies]
+meowhash = "0.3.0"
+tokio = { version = "0.2", features = ["full"] }
+structopt = "0.3"
+digest = "0.9.0"
+jwalk = "0.5.1"
+hex = "0.4.2"
+num_cpus = "1.13.0"
+indicatif = "0.15.0"
+pathdiff = "0.2.0"
