@@ -1,10 +1,11 @@
 [package]
 name = "recursum"
 version = "0.1.0"
-authors = ["Chris Barnes <barnesc@janelia.hhmi.org>"]
+authors = ["Chris Barnes <cbarnes@mrc-lmb.cam.ac.uk>"]
 edition = "2018"
 description = "Quickly hash all files in a directory tree"
 license = "MIT"
+repository = "https://github.com/clbarnes/recursum"
 
 [dependencies]
 meowhash = "0.3.0"
