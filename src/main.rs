@@ -1,9 +1,9 @@
 use std;
 use std::collections::VecDeque;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::ffi::OsString;
 
 use digest::{Digest, Output};
 use indicatif::{HumanBytes, HumanDuration, ProgressBar, ProgressStyle};
@@ -90,8 +90,8 @@ impl ResultOutput {
     // }
 
     fn with_default_progress() -> Self {
-        let spinner_style =
-            ProgressStyle::default_spinner().template("{bytes} | {elapsed} | {bytes_per_sec} | {msg}");
+        let spinner_style = ProgressStyle::default_spinner()
+            .template("{bytes} | {elapsed} | {bytes_per_sec} | {msg}");
         let spinner = ProgressBar::new_spinner().with_style(spinner_style);
         Self {
             started: Instant::now(),
@@ -205,10 +205,7 @@ fn or_num_cpus(opt: Option<usize>) -> usize {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "recursum",
-    about = "Hash lots of files fast, in parallel."
-)]
+#[structopt(name = "recursum", about = "Hash lots of files fast, in parallel.")]
 struct Opt {
     /// File name, directory name (every file recursively will be hashed, in depth first order), or - for getting FILE list from stdin
     #[structopt()]
@@ -233,13 +230,17 @@ impl InputConfig {
     async fn hash(&self, truncate_to: Option<usize>) {
         match self {
             Self::Directory((n_jobs, root, walkers)) => {
-                let stream = walk_paths(root.clone(), queue_length(*n_jobs), Parallelism::RayonNewPool(*walkers));
+                let stream = walk_paths(
+                    root.clone(),
+                    queue_length(*n_jobs),
+                    Parallelism::RayonNewPool(*walkers),
+                );
                 hash_from_stream(stream, truncate_to, *n_jobs).await;
             }
             Self::Stdin(n_jobs) => {
                 let stream = stdin_paths();
                 hash_from_stream(stream, truncate_to, *n_jobs).await;
-            },
+            }
         }
     }
 }
@@ -273,7 +274,7 @@ fn main() {
             input = InputConfig::Directory((threads, path, walkers))
         } else if path.is_file() {
             handle_single_file(&path, opt.digest_length);
-            return
+            return;
         } else {
             panic!("Given input is not a directory, file, or - for stdin");
         }
