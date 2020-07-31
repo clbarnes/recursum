@@ -41,7 +41,7 @@ ARGS:
 Example:
 
 ```sh
-fd --type file | recursum --threads 10 --digest 64 - > my_checksums.txt
+fd --threads 1 --type file | recursum --threads 10 --digest 64 - > my_checksums.txt
 ```
 
 This should be much more efficient, and with better logging, than using `--exec` or `| xargs`.
