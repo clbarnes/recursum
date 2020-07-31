@@ -16,7 +16,6 @@ jwalk = "0.5.1"
 hex = "0.4.2"
 num_cpus = "1.13.0"
 indicatif = "0.15.0"
-pathdiff = "0.2.0"
 
 [dev-dependencies]
 cargo-release = "0.13.5"
