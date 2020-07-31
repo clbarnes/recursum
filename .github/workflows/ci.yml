@@ -40,7 +40,7 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo run -- cargo.toml
+      - run: cargo run -- Cargo.toml
         name: Can hash single file
       - run: cargo run -- target
         name: Can recursively hash directory
