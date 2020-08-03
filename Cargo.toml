@@ -6,10 +6,11 @@ edition = "2018"
 description = "Quickly hash all files in a directory tree"
 license = "MIT"
 repository = "https://github.com/clbarnes/recursum"
+readme = "README.md"
 
 [dependencies]
 meowhash = "0.3.0"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2", features = ["rt-threaded", "sync", "stream", "io-std", "io-util"] }
 structopt = "0.3"
 digest = "0.9.0"
 jwalk = "0.5.1"

@@ -207,7 +207,7 @@ fn or_num_cpus(opt: Option<usize>) -> usize {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "recursum", about = "Hash lots of files fast, in parallel.")]
 struct Opt {
-    /// File name, directory name (every file recursively will be hashed, in depth first order), or - for getting FILE list from stdin
+    /// File name, directory name (every file recursively will be hashed, in depth first order), or '-' for getting list of files from stdin (order is conserved)
     #[structopt()]
     input: OsString,
     /// Directory-walking threads, if input is a directory

@@ -31,11 +31,11 @@ FLAGS:
 OPTIONS:
     -d, --digest <digest-length>    Maximum length of output hash digests
     -t, --threads <threads>         Hashing threads
-    -w, --walkers <walkers>         Directory-walking threads
+    -w, --walkers <walkers>         Directory-walking threads, if input is a directory
 
 ARGS:
-    <input>    File name, directory name (every file recursively will be hashed, in depth first order), or - for
-               stdin
+    <input>    File name, directory name (every file recursively will be hashed, in depth first order), or '-' for
+               getting list of files from stdin (order is conserved)
 ```
 
 Example:
