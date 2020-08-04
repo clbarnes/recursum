@@ -1,6 +1,6 @@
 [package]
 name = "recursum"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Chris Barnes <cbarnes@mrc-lmb.cam.ac.uk>"]
 edition = "2018"
 description = "Quickly hash all files in a directory tree"

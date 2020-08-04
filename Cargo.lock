@@ -889,7 +889,7 @@ dependencies = [
 
 [[package]]
 name = "recursum"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "cargo-release",
  "digest",
