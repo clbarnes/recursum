@@ -1,4 +1,3 @@
-use std;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::fs::File;
@@ -9,13 +8,11 @@ use digest::{Digest, Output};
 use indicatif::{HumanBytes, HumanDuration, ProgressBar, ProgressStyle};
 use jwalk::{Parallelism, WalkDir};
 use meowhash::MeowHasher;
-use num_cpus;
 use std::time::Instant;
 use structopt::StructOpt;
-use tokio;
 use tokio::io::AsyncBufReadExt;
 use tokio::runtime;
-use tokio::stream::{Stream, StreamExt};
+use tokio::stream::{iter, Stream, StreamExt};
 use tokio::sync::mpsc;
 
 const READ_BUFFER_SIZE: usize = 8 * 1024; // BufReader default, may want to increase
@@ -68,6 +65,7 @@ struct ResultOutput {
     total_files: u64,
     total_bytes: u64,
     progress: Option<ProgressBar>,
+    quiet: bool,
 }
 
 impl ResultOutput {
@@ -89,6 +87,16 @@ impl ResultOutput {
     //     }
     // }
 
+    fn default() -> Self {
+        Self {
+            started: Instant::now(),
+            total_files: 0,
+            total_bytes: 0,
+            progress: None,
+            quiet: true,
+        }
+    }
+
     fn with_default_progress() -> Self {
         let spinner_style = ProgressStyle::default_spinner()
             .template("{bytes} | {elapsed} | {bytes_per_sec} | {msg}");
@@ -98,6 +106,7 @@ impl ResultOutput {
             total_files: 0,
             total_bytes: 0,
             progress: Some(spinner),
+            quiet: false,
         }
     }
 
@@ -107,23 +116,27 @@ impl ResultOutput {
             p.set_message(&format!("{} {:?}", HumanBytes(size), path));
             p.inc(size);
         }
-        self.total_files += 1;
-        self.total_bytes += size;
+        if !self.quiet {
+            self.total_files += 1;
+            self.total_bytes += size;
+        }
     }
 
     fn finish(&mut self) {
         if let Some(ref mut p) = self.progress {
             p.finish_and_clear();
         }
-        let elapsed = Instant::now().duration_since(self.started);
-        let rate = (self.total_bytes as f64 / elapsed.as_secs_f64()).floor() as u64;
-        eprintln!(
-            "{} files ({}) hashed in {} ({}/s)",
-            self.total_files,
-            HumanBytes(self.total_bytes),
-            HumanDuration(elapsed),
-            HumanBytes(rate),
-        );
+        if !self.quiet {
+            let elapsed = Instant::now().duration_since(self.started);
+            let rate = (self.total_bytes as f64 / elapsed.as_secs_f64()).floor() as u64;
+            eprintln!(
+                "{} files ({}) hashed in {} ({}/s)",
+                self.total_files,
+                HumanBytes(self.total_bytes),
+                HumanDuration(elapsed),
+                HumanBytes(rate),
+            );
+        }
     }
 }
 
@@ -131,8 +144,14 @@ async fn hash_from_stream<S: Stream<Item = PathBuf> + Unpin>(
     mut path_stream: S,
     truncate_to: Option<usize>,
     n_jobs: usize,
+    quiet: bool,
 ) {
-    let mut output = ResultOutput::with_default_progress();
+    let mut output;
+    if quiet {
+        output = ResultOutput::default();
+    } else {
+        output = ResultOutput::with_default_progress();
+    }
 
     let mut fut_queue = VecDeque::with_capacity(n_jobs);
     let mut is_finished = false;
@@ -208,8 +227,8 @@ fn or_num_cpus(opt: Option<usize>) -> usize {
 #[structopt(name = "recursum", about = "Hash lots of files fast, in parallel.")]
 struct Opt {
     /// File name, directory name (every file recursively will be hashed, in depth first order), or '-' for getting list of files from stdin (order is conserved)
-    #[structopt()]
-    input: OsString,
+    #[structopt(required = true)]
+    input: Vec<OsString>,
     /// Directory-walking threads, if input is a directory
     #[structopt(short = "w", long = "walkers")]
     walkers: Option<usize>,
@@ -219,65 +238,88 @@ struct Opt {
     /// Maximum length of output hash digests
     #[structopt(short = "d", long = "digest")]
     digest_length: Option<usize>,
+    /// Do not show progress information
+    #[structopt(short = "q", long = "quiet")]
+    quiet: bool,
 }
 
 enum InputConfig {
+    /// number of hashing threads, file paths
+    Files((usize, Vec<PathBuf>)),
+    /// number of hashing threads, root directory, number of walker threads
     Directory((usize, PathBuf, usize)),
+    /// number of hashing threads
     Stdin(usize),
 }
 
 impl InputConfig {
-    async fn hash(&self, truncate_to: Option<usize>) {
+    async fn hash(&self, truncate_to: Option<usize>, quiet: bool) {
         match self {
+            Self::Files((n_jobs, paths)) => {
+                let stream = iter(paths.clone());
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet).await;
+            }
             Self::Directory((n_jobs, root, walkers)) => {
                 let stream = walk_paths(
                     root.clone(),
                     queue_length(*n_jobs),
                     Parallelism::RayonNewPool(*walkers),
                 );
-                hash_from_stream(stream, truncate_to, *n_jobs).await;
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet).await;
             }
             Self::Stdin(n_jobs) => {
                 let stream = stdin_paths();
-                hash_from_stream(stream, truncate_to, *n_jobs).await;
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet).await;
             }
         }
     }
 }
 
-fn handle_single_file(path: &Path, truncate: Option<usize>) {
+fn handle_single_file(path: &Path, truncate: Option<usize>, quiet: bool) {
     let started = Instant::now();
     let (digest, size) = hash_file(path, MeowHasher::new(), truncate);
     println!("{:?}\t{}", path, digest);
-    let elapsed = Instant::now().duration_since(started);
-    let rate = (size as f64 / elapsed.as_secs_f64()).floor() as u64;
-    eprintln!(
-        "{} files ({}) hashed in {} ({}/s)",
-        1,
-        HumanBytes(size as u64),
-        HumanDuration(elapsed),
-        HumanBytes(rate),
-    );
+    if !quiet {
+        let elapsed = Instant::now().duration_since(started);
+        let rate = (size as f64 / elapsed.as_secs_f64()).floor() as u64;
+        eprintln!(
+            "{} files ({}) hashed in {} ({}/s)",
+            1,
+            HumanBytes(size as u64),
+            HumanDuration(elapsed),
+            HumanBytes(rate),
+        );
+    }
 }
 
 fn main() {
     let opt = Opt::from_args();
     let threads = or_num_cpus(opt.threads);
+    let mut path_strs = opt.input.clone();
 
     let input;
-    if opt.input == "-" {
-        input = InputConfig::Stdin(threads);
-    } else {
-        let path = PathBuf::from(opt.input);
-        if path.is_dir() {
-            let walkers = or_num_cpus(opt.walkers);
-            input = InputConfig::Directory((threads, path, walkers))
-        } else if path.is_file() {
-            handle_single_file(&path, opt.digest_length);
-            return;
+
+    if path_strs.is_empty() {
+        panic!("do something about empty inputs");
+    } else if path_strs.len() == 1 {
+        let inp = path_strs.pop().unwrap();
+        if inp == "-" {
+            input = InputConfig::Stdin(threads);
         } else {
-            panic!("Given input is not a directory, file, or - for stdin");
+            let path = PathBuf::from(inp);
+            if path.is_dir() {
+                let walkers = or_num_cpus(opt.walkers);
+                input = InputConfig::Directory((threads, path, walkers));
+            } else if path.is_file() {
+                handle_single_file(&path, opt.digest_length, opt.quiet);
+                return;
+            } else {
+                panic!("Given input is not a directory, file, or - for stdin");
+            }
         }
+    } else {
+        let paths = path_strs.into_iter().map(PathBuf::from);
+        input = InputConfig::Files((threads, paths.collect()))
     }
 
     let mut rt = runtime::Builder::new()
@@ -287,5 +329,5 @@ fn main() {
         .build()
         .unwrap();
 
-    rt.block_on(input.hash(opt.digest_length));
+    rt.block_on(input.hash(opt.digest_length, opt.quiet));
 }

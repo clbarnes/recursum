@@ -42,6 +42,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo run -- Cargo.toml
         name: Can hash single file
+      - run: cargo run -- Cargo.toml README.md
+        name: Can hash multiple files
       - run: cargo run -- target
         name: Can recursively hash directory
       - run: find . -type f | cargo run -- -
