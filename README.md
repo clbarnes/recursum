@@ -11,9 +11,20 @@ There are 3 modes of operation.
 Parallelises file discovery (in usage #1) and hashing.
 [Default hasher](https://mollyrocket.com/meowhash) is not cryptographically secure.
 
-`"{path}"\t{hex_digest}` printed to stdout; progress information on stderr.
+`"{path}"\t{hex_digest}` is printed to stdout.
+This is reversed compared to most hashing utilities (`md5sum`, `sha1sum` etc.) with the intention of making it easier to sort deterministically by file name (pipe the output through `awk -F '\t' 'BEGIN {OFS = FS} {print $2,$1}'` to reverse it, keeping the tab intact).
+
+Ongoing progress information, and a final time and rate, are printed to stderr.
 
 Contributions welcome.
+
+## Installation
+
+With `cargo` installed (get it with [rustup](https://rustup.rs/)):
+
+```sh
+cargo install recursum
+```
 
 ## Usage
 
