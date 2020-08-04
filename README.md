@@ -8,7 +8,7 @@ There are 3 modes of operation.
 2. Hash any number of files given as arguments.
 3. Take a list of files from stdin and hash each of them.
 
-Parallelises file discovery (in usage #1) and hashing (#1 and #3).
+Parallelises file discovery (in usage #1) and hashing.
 [Default hasher](https://mollyrocket.com/meowhash) is not cryptographically secure.
 
 `"{path}"\t{hex_digest}` printed to stdout; progress information on stderr.
