@@ -15,6 +15,9 @@ use tokio::runtime;
 use tokio::stream::{iter, Stream, StreamExt};
 use tokio::sync::mpsc;
 
+mod hashers;
+use crate::hashers::HashType;
+
 const READ_BUFFER_SIZE: usize = 8 * 1024; // BufReader default, may want to increase
 const HASH_BUFFER_SIZE: usize = 1024;
 const DEFAULT_SEPARATOR: &str = "\t";
