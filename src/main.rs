@@ -18,6 +18,7 @@ use tokio::sync::mpsc;
 const READ_BUFFER_SIZE: usize = 8 * 1024; // BufReader default, may want to increase
 const HASH_BUFFER_SIZE: usize = 1024;
 const DEFAULT_SEPARATOR: &str = "\t";
+const COMPATIBLE_SEPARATOR: &str = "  ";
 
 const BUFFER_PPN: f64 = 3.0;
 
@@ -68,6 +69,7 @@ struct ResultOutput {
     progress: Option<ProgressBar>,
     quiet: bool,
     separator: String,
+    hash_first: bool,
 }
 
 impl ResultOutput {
@@ -89,7 +91,7 @@ impl ResultOutput {
     //     }
     // }
 
-    fn new(separator: &str) -> Self {
+    fn new(separator: &str, hash_first: bool) -> Self {
         Self {
             started: Instant::now(),
             total_files: 0,
@@ -97,10 +99,11 @@ impl ResultOutput {
             progress: None,
             quiet: true,
             separator: separator.to_string(),
+            hash_first,
         }
     }
 
-    fn with_default_progress(sep: &str) -> Self {
+    fn with_default_progress(sep: &str, hash_first: bool) -> Self {
         let spinner_style = ProgressStyle::default_spinner()
             .template("{bytes} | {elapsed} | {bytes_per_sec} | {msg}");
         let spinner = ProgressBar::new_spinner().with_style(spinner_style);
@@ -111,16 +114,24 @@ impl ResultOutput {
             progress: Some(spinner),
             quiet: false,
             separator: sep.to_string(),
+            hash_first,
         }
     }
 
     fn handle_output(&mut self, path: &Path, hash: &str, size: u64) {
         let path_as_str = path.as_os_str().to_string_lossy();
-        println!("{}{}{}", path_as_str, self.separator, hash);
+
+        if self.hash_first {
+            println!("{}{}{}", hash, self.separator, path_as_str);
+        } else {
+            println!("{}{}{}", path_as_str, self.separator, hash);
+        }
+
         if let Some(ref mut p) = self.progress {
             p.set_message(&format!("{} {:?}", HumanBytes(size), path_as_str));
             p.inc(size);
         }
+
         if !self.quiet {
             self.total_files += 1;
             self.total_bytes += size;
@@ -151,12 +162,13 @@ async fn hash_from_stream<S: Stream<Item = PathBuf> + Unpin>(
     n_jobs: usize,
     quiet: bool,
     separator: &str,
+    hash_first: bool,
 ) {
     let mut output;
     if quiet {
-        output = ResultOutput::new(separator);
+        output = ResultOutput::new(separator, hash_first);
     } else {
-        output = ResultOutput::with_default_progress(separator);
+        output = ResultOutput::with_default_progress(separator, hash_first);
     }
 
     let mut fut_queue = VecDeque::with_capacity(n_jobs);
@@ -232,24 +244,27 @@ fn or_num_cpus(opt: Option<usize>) -> usize {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "recursum", about = "Hash lots of files fast, in parallel.")]
 struct Opt {
-    /// One or more file names, one directory name (every file recursively will be hashed, in depth first order), or '-' for getting list of files from stdin (order is conserved)
+    /// One or more file names, one directory name (every file recursively will be hashed, in depth first order), or '-' for getting list of files from stdin (order is conserved).
     #[structopt(required = true)]
     input: Vec<OsString>,
-    /// Directory-walking threads, if input is a directory
+    /// Directory-walking threads, if <input> is a directory.
     #[structopt(short = "w", long = "walkers")]
     walkers: Option<usize>,
-    /// Hashing threads
+    /// Hashing threads.
     #[structopt(short = "t", long = "threads")]
     threads: Option<usize>,
-    /// Maximum length of output hash digests
-    #[structopt(short = "d", long = "digest")]
+    /// Maximum length of output hash digests.
+    #[structopt(short = "d", long = "digest-length")]
     digest_length: Option<usize>,
-    /// Do not show progress information
+    /// Do not show progress information.
     #[structopt(short = "q", long = "quiet")]
     quiet: bool,
-    /// Separator in rust escaped format (https://doc.rust-lang.org/reference/tokens.html#ascii-escapes). Note that you may additionally have to escape it for your shell.
-    #[structopt(short = "s", long = "separator", default_value = DEFAULT_SEPARATOR)]
-    separator: String,
+    /// Separator. Defaults to tab unless --compatible is given. Use "\t" for tab and "\0" for null (cannot be mixed with other characters).
+    #[structopt(short = "s", long = "separator")]
+    separator: Option<String>,
+    /// "Compatible mode", which prints the hash first and changes the default separator to double-space, as used by system utilities like md5sum.
+    #[structopt(short = "c", long = "compatible")]
+    compatible: bool,
 }
 
 enum InputConfig {
@@ -262,11 +277,17 @@ enum InputConfig {
 }
 
 impl InputConfig {
-    async fn hash(&self, truncate_to: Option<usize>, quiet: bool, separator: &str) {
+    async fn hash(
+        &self,
+        truncate_to: Option<usize>,
+        quiet: bool,
+        separator: &str,
+        hash_first: bool,
+    ) {
         match self {
             Self::Files((n_jobs, paths)) => {
                 let stream = iter(paths.clone());
-                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator).await;
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator, hash_first).await;
             }
             Self::Directory((n_jobs, root, walkers)) => {
                 let stream = walk_paths(
@@ -274,21 +295,33 @@ impl InputConfig {
                     queue_length(*n_jobs),
                     Parallelism::RayonNewPool(*walkers),
                 );
-                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator).await;
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator, hash_first).await;
             }
             Self::Stdin(n_jobs) => {
                 let stream = stdin_paths();
-                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator).await;
+                hash_from_stream(stream, truncate_to, *n_jobs, quiet, separator, hash_first).await;
             }
         }
     }
 }
 
-fn handle_single_file(path: &Path, truncate: Option<usize>, quiet: bool, sep: &str) {
+fn handle_single_file(
+    path: &Path,
+    truncate: Option<usize>,
+    quiet: bool,
+    separator: &str,
+    hash_first: bool,
+) {
     let started = Instant::now();
     let (digest, size) = hash_file(path, MeowHasher::new(), truncate);
     let path_as_str = path.as_os_str().to_string_lossy();
-    println!("{}{}{}", path_as_str, sep, digest);
+
+    if hash_first {
+        println!("{}{}{}", digest, separator, path_as_str);
+    } else {
+        println!("{}{}{}", path_as_str, separator, digest);
+    }
+
     if !quiet {
         let elapsed = Instant::now().duration_since(started);
         let rate = (size as f64 / elapsed.as_secs_f64()).floor() as u64;
@@ -307,9 +340,26 @@ fn main() {
     let threads = or_num_cpus(opt.threads);
     let mut path_strs = opt.input.clone();
 
+    let hash_first = opt.compatible.clone();
+    let separator = opt
+        .separator
+        .map(|s| match s.as_str() {
+            "\\t" => "\t".to_string(),
+            "\\0" => "\0".to_string(),
+            _ => s,
+        })
+        .unwrap_or_else(|| {
+            if hash_first {
+                COMPATIBLE_SEPARATOR.to_string()
+            } else {
+                DEFAULT_SEPARATOR.to_string()
+            }
+        });
+
     let input;
 
     if path_strs.is_empty() {
+
         panic!("do something about empty inputs");
     } else if path_strs.len() == 1 {
         let inp = path_strs.pop().unwrap();
@@ -321,7 +371,7 @@ fn main() {
                 let walkers = or_num_cpus(opt.walkers);
                 input = InputConfig::Directory((threads, path, walkers));
             } else if path.is_file() {
-                handle_single_file(&path, opt.digest_length, opt.quiet, &opt.separator);
+                handle_single_file(&path, opt.digest_length, opt.quiet, &separator, hash_first);
                 return;
             } else {
                 panic!("Given input is not a directory, file, or - for stdin");
@@ -339,5 +389,5 @@ fn main() {
         .build()
         .unwrap();
 
-    rt.block_on(input.hash(opt.digest_length, opt.quiet, &opt.separator));
+    rt.block_on(input.hash(opt.digest_length, opt.quiet, &separator, hash_first));
 }

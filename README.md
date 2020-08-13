@@ -11,10 +11,13 @@ There are 3 modes of operation.
 Parallelises file discovery (in usage #1) and hashing.
 [Default hasher](https://mollyrocket.com/meowhash) is not cryptographically secure.
 
-`"{path}"\t{hex_digest}` is printed to stdout.
-This is reversed compared to most hashing utilities (`md5sum`, `sha1sum` etc.) with the intention of making it easier to sort deterministically by file name (pipe the output through `awk -F '\t' 'BEGIN {OFS = FS} {print $2,$1}'` to reverse it, keeping the tab intact).
+By default, `{path}\t{hex_digest}` is printed to stdout.
+This is reversed compared to most hashing utilities (`md5sum`, `sha1sum` etc.) with the intention of making it easier to sort deterministically by file name, and because tabs (disallowed by many file system interfaces) are more reliable to split on than double spaces (an easy typo in file names).
+However, the `--compatible` switch exists to print `{hex_digest}  {path}`.
 
 Ongoing progress information, and a final time and rate, are printed to stderr.
+
+Note that most hashers, particularly fast non-crypto hashes, will be faster than slower storage media like disks, so the gains from using many hashing threads may saturate quickly.
 
 Contributions welcome.
 
@@ -36,18 +39,22 @@ USAGE:
     recursum [FLAGS] [OPTIONS] <input>...
 
 FLAGS:
-    -h, --help       Prints help information
-    -q, --quiet      Do not show progress information
-    -V, --version    Prints version information
+    -c, --compatible    "Compatible mode", which prints the hash first and changes the default separator to double-
+                        space, as used by system utilities like md5sum
+    -h, --help          Prints help information
+    -q, --quiet         Do not show progress information
+    -V, --version       Prints version information
 
 OPTIONS:
-    -d, --digest <digest-length>    Maximum length of output hash digests
-    -t, --threads <threads>         Hashing threads
-    -w, --walkers <walkers>         Directory-walking threads, if input is a directory
+    -d, --digest-length <digest-length>    Maximum length of output hash digests
+    -s, --separator <separator>            Separator. Defaults to tab unless --compatible is given. Use "\t" for tab and
+                                           "\0" for null (cannot be mixed with other characters)
+    -t, --threads <threads>                Hashing threads
+    -w, --walkers <walkers>                Directory-walking threads, if <input> is a directory
 
 ARGS:
-    <input>...    File name, directory name (every file recursively will be hashed, in depth first order), or '-'
-                  for getting list of files from stdin (order is conserved)
+    <input>...    One or more file names, one directory name (every file recursively will be hashed, in depth first
+                  order), or '-' for getting list of files from stdin (order is conserved)
 ```
 
 Example:
@@ -56,7 +63,10 @@ Example:
 fd --threads 1 --type file | recursum --threads 10 --digest 64 - > my_checksums.txt
 ```
 
-This should be more efficient, and have better logging, than using `--exec` or `| xargs`.
+This could be more efficient, and have better logging, than using `--exec` or `| xargs`.
+
+Note that `--separator` does not understand escape sequences.
+In order to pass e.g. a tab as the separator, use `recursum -s $(echo '\t') -`
 
 ## Operation
 
@@ -93,4 +103,12 @@ find . -type f -print0 | xargs -0 -P 8 -n 1 -I _ md5sum "_"
 ```
 
 This spawns a new shell for every invocation, which could be problematic, and may not make as good use of the CPU as there can be no communication between processes.
-However, these tools are far more mature than recursum, so they may work better for you.
+
+Even better would be to use `parallel` in "xargs mode".
+There will be some overhead to the CPU due to multiple executions of the checksum tool, and RAM due to the way parallel buffers its output.
+
+```sh
+find . -type f | parallel -X md5sum
+```
+
+These tools are far more mature than recursum, so they may work better for you.
