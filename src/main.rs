@@ -359,7 +359,6 @@ fn main() {
     let input;
 
     if path_strs.is_empty() {
-
         panic!("do something about empty inputs");
     } else if path_strs.len() == 1 {
         let inp = path_strs.pop().unwrap();
