@@ -11,13 +11,14 @@ There are 3 modes of operation.
 Parallelises file discovery (in usage #1) and hashing.
 [Default hasher](https://mollyrocket.com/meowhash) is not cryptographically secure.
 
-By default, `{path}\t{hex_digest}` is printed to stdout.
+By default, `{path}{separator}{hex_digest}` is printed to stdout, where `separator` defaults to tab.
 This is reversed compared to most hashing utilities (`md5sum`, `sha1sum` etc.) with the intention of making it easier to sort deterministically by file name, and because tabs (disallowed by many file system interfaces) are more reliable to split on than double spaces (an easy typo in file names).
-However, the `--compatible` switch exists to print `{hex_digest}  {path}`.
+However, the `--compatible` switch exists to print `{hex_digest}{separator}{path}`, and set the default `separator` to double space for compatibility.
 
 Ongoing progress information, and a final time and rate, are printed to stderr.
 
 Note that most hashers, particularly fast non-crypto hashes, will be faster than slower storage media like disks, so the gains from using many hashing threads may saturate quickly.
+Gains are more likely to come from the parallelised I/O, which will also saturate fairly quickly.
 
 Contributions welcome.
 
@@ -65,8 +66,8 @@ fd --threads 1 --type file | recursum --threads 10 --digest 64 - > my_checksums.
 
 This could be more efficient, and have better logging, than using `--exec` or `| xargs`.
 
-Note that `--separator` does not understand escape sequences.
-In order to pass e.g. a tab as the separator, use `recursum -s $(echo '\t') -`
+Note that `--separator` does not allow escape sequences (for tab and null character) in multi-character values.
+In order to pass such a multi-character value as the separator, use `recursum -s $(echo 'ab\tcd') -`
 
 ## Operation
 
@@ -112,3 +113,5 @@ find . -type f | parallel -X md5sum
 ```
 
 These tools are far more mature than recursum, so they may work better for you.
+
+`pv` can be used with these tools for some extremely coarse progress tracking.
